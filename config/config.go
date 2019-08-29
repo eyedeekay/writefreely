@@ -91,11 +91,31 @@ type (
 		DefaultVisibility string `ini:"default_visibility"`
 	}
 
+	// I2PCfg holds values that are used for i2p configuration.
+	I2PCfg struct {
+		SAMAddr  string `ini:"sam_address"`
+		TunLen   int    `ini:"tunnel_length"`
+		TunQuant int    `ini:"tunnel_quantity"`
+		TunID    string `ini:"garlic_id"`
+		ProxyID  string `ini:"proxy_id"`
+	}
+
+	// TorCfg holds values that are used for i2p configuration.
+	TorCfg struct {
+		SocksAddr   string `ini:"socks_addr"`
+		ControlAddr string `ini:"control_addr"`
+		SingleOnion bool   `ini:"single_onion"`
+		OnionID     string `ini:"onion_id"`
+		ProxyID     string `ini:"proxy_id"`
+	}
+
 	// Config holds the complete configuration for running a writefreely instance
 	Config struct {
 		Server   ServerCfg   `ini:"server"`
 		Database DatabaseCfg `ini:"database"`
 		App      AppCfg      `ini:"app"`
+		I2P      I2PCfg      `ini:"i2p"`
+		Tor      TorCfg      `ini:"tor"`
 	}
 )
 

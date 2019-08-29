@@ -22,6 +22,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -40,6 +41,9 @@ import (
 	"github.com/writeas/writefreely/key"
 	"github.com/writeas/writefreely/migrations"
 	"github.com/writeas/writefreely/page"
+
+	"github.com/eyedeekay/httptunnel"
+	"github.com/eyedeekay/sam-forwarder/tcp"
 	"golang.org/x/crypto/acme/autocert"
 )
 
@@ -72,6 +76,10 @@ type App struct {
 	keys         *key.Keychain
 	sessionStore *sessions.CookieStore
 	formDecoder  *schema.Decoder
+
+	// i2p
+	i2pSrv *samforwarder.SAMForwarder
+	i2pCli *i2phttpproxy.SAMHTTPProxy
 
 	timeline *localTimeline
 }
@@ -361,7 +369,70 @@ func Initialize(apper Apper, debug bool) (*App, error) {
 		initLocalTimeline(apper.App())
 	}
 
+	err = apper.App().InitHiddenServices()
+	if err != nil {
+		return nil, err
+	}
+
 	return apper.App(), nil
+}
+
+func (app *App) InitHiddenServices() error {
+	var err error
+	if app.cfg.I2P.TunID == "" || app.cfg.I2P.ProxyID == "" {
+		return nil
+	}
+	// Start web application server
+	bindAddress := app.cfg.Server.Bind
+	if bindAddress == "" {
+		bindAddress = "localhost"
+	}
+	length := app.cfg.I2P.TunLen
+	if length == 0 {
+		length = 2
+	}
+	quant := app.cfg.I2P.TunQuant
+	if quant == 0 {
+		quant = 2
+	}
+	sam := app.cfg.I2P.SAMAddr
+	if sam == "" {
+		sam = "127.0.0.1:7656"
+	}
+	p := strconv.Itoa(app.cfg.Server.Port)
+	shp := strings.SplitN(sam, ":", 2)
+	app.i2pSrv, err = samforwarder.NewSAMForwarderFromOptions(
+		samforwarder.SetSaveFile(true),
+		samforwarder.SetName(app.cfg.I2P.TunID),
+		samforwarder.SetInLength(length),
+		samforwarder.SetOutLength(length),
+		samforwarder.SetInQuantity(quant),
+		samforwarder.SetOutQuantity(quant),
+		samforwarder.SetHost(bindAddress),
+		samforwarder.SetPort(p),
+		samforwarder.SetSAMHost(shp[0]),
+		samforwarder.SetSAMPort(shp[1]),
+	)
+	if err != nil {
+		return err
+	}
+	app.i2pCli, err = i2phttpproxy.NewHttpProxy(
+		i2phttpproxy.SetName(app.cfg.I2P.TunID),
+		i2phttpproxy.SetInLength(uint(length)),
+		i2phttpproxy.SetOutLength(uint(length)),
+		i2phttpproxy.SetInQuantity(uint(quant)),
+		i2phttpproxy.SetOutQuantity(uint(quant)),
+		i2phttpproxy.SetProxyHost(bindAddress),
+		i2phttpproxy.SetProxyPort("47955"),
+		i2phttpproxy.SetKeysPath(app.cfg.I2P.TunID),
+		i2phttpproxy.SetHost(shp[0]),
+		i2phttpproxy.SetPort(shp[1]),
+	)
+	if err != nil {
+		return err
+	}
+	//app.torSrv, err =
+	return nil
 }
 
 func Serve(app *App, r *mux.Router) {
@@ -380,6 +451,16 @@ func Serve(app *App, r *mux.Router) {
 		log.Info("Done.")
 		os.Exit(0)
 	}()
+
+	// Start hidden services, if they exist
+	if app.i2pCli != nil && app.i2pSrv != nil {
+		go app.i2pCli.Serve()
+		go app.i2pSrv.Serve()
+		app.i2pCli.SetupProxy()
+        if app.cfg.Database.Host != "" {
+            i2phttpproxy.UnProxyLocal([]string{app.cfg.Database.Host})
+        }
+	}
 
 	// Start web application server
 	var bindAddress = app.cfg.Server.Bind

@@ -1,6 +1,6 @@
 [server]
-hidden_host = 
-port        = 8080
+hidden_host =
+port        = 8089
 
 [database]
 type     = mysql
@@ -9,6 +9,11 @@ password = changeme
 database = writefreely
 host     = db
 port     = 3306
+
+## This is an SQLite database example
+#[database]
+#type     = sqlite3
+#filename = writeas.db
 
 [app]
 site_name         = WriteFreely Example Blog!
@@ -24,3 +29,10 @@ federation        = true
 public_stats      = true
 private           = false
 
+## If you want to run an I2P eepSite, configure this
+#[i2p]
+#sam_address     = 127.0.0.1:7656
+#tunnel_length   = 2
+#tunnel_quantity = 2
+#garlic_id       = writeextrafreely
+#proxy_id        = federateextrafreely
